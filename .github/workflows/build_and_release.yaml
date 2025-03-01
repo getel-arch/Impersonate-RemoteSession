@@ -25,9 +25,6 @@ jobs:
     - name: Compile 64bit Binary
       run: gcc .\src\impersonate_remote_session.c -o .\output\impersonate_remote_session_x64.exe -s -m64 -lwtsapi32
 
-    - name: Remove Placeholder
-      run: Remove-Item output/.gitkeep
-
     - name: Read Version
       run: |
         $version = Get-Content VERSION
