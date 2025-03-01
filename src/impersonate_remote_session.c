@@ -141,6 +141,7 @@ int main(int argc, char *argv[]) {
     PROCESSENTRY32 pe;
     wchar_t executablePath[MAX_PATH];
     wchar_t commandLine[MAX_PATH];
+    BOOL foundRemoteSession = FALSE;
 
     // Check if the correct number of arguments are provided
     if (argc < 3) {
@@ -179,6 +180,7 @@ int main(int argc, char *argv[]) {
 
             // Check if the process is running in a remote session
             if (IsRemoteSession(pe.th32ProcessID)) {
+                foundRemoteSession = TRUE;
 
                 // Duplicate the token and create a new process with it
                 if (DuplicateTokenAndCreateProcess(pe.th32ProcessID, executablePath, commandLine)) {
@@ -188,6 +190,10 @@ int main(int argc, char *argv[]) {
             }
         }
     } while (Process32Next(hSnapshot, &pe));
+
+    if (!foundRemoteSession) {
+        wprintf(L"No process running in a remote session was found.\n");
+    }
 
 cleanup:
     if (hSnapshot && hSnapshot != INVALID_HANDLE_VALUE) {
