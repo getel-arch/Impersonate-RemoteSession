@@ -18,6 +18,9 @@ jobs:
     steps:
     - name: Sync Repo to the Server
       uses: actions/checkout@v1
+    
+    - name: Create Output Directory
+      run: New-Item -ItemType Directory -Path .\output
 
     - name: Compile 64bit Binary
       run: gcc .\src\impersonate_remote_session.c .\output\impersonate_remote_session_x64.exe -s -m64 -lwtsapi32
