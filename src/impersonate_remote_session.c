@@ -53,7 +53,7 @@ BOOL IsRemoteSession(DWORD processId) {
     BOOL result = FALSE;
 
     // Get the session ID for the specified process
-    if (!ProcessIdToSessionId(processId, &sessionId)) {
+    if (ProcessIdToSessionId(processId, &sessionId) == 0) {
         wprintf(L"ProcessIdToSessionId error: %u\n", GetLastError());
         goto cleanup;
     }
