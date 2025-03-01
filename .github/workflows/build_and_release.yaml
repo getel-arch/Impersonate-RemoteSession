@@ -1,0 +1,44 @@
+name: Build & Release
+
+# Sets the trigger to changing the VERSION file in the main branch
+on:
+  push:
+    branches:
+    - main
+    paths:
+    - 'VERSION'
+
+# Allows the workflow to create release
+permissions:
+  contents: write
+
+jobs:
+  build_and_release:
+    runs-on: windows-latest
+    steps:
+    - name: Sync Repo to the Server
+      uses: actions/checkout@v1
+
+    - name: Compile 64bit Binary
+      run: |
+        windres app.rc -O coff -o app.o
+        gcc .\src\impersonate_remote_session.c .\app.o -o .\output\impersonate_remote_session_x64.exe -s -m64 -lwtsapi32
+
+    - name: Remove Placeholder
+      run: Remove-Item output/.gitkeep
+
+    - name: Read Version
+      run: |
+        $version = Get-Content VERSION
+        Write-Output "VERSION=$version" >> $env:GITHUB_ENV
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ env.VERSION }}
+        name: Impersonate-RemoteSession ${{ env.VERSION }}
+        make_latest: true
+        draft: false
+        prerelease: false
+        fail_on_unmatched_files: true
+        files: ./output/*
