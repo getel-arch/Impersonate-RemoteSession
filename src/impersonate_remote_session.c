@@ -47,6 +47,7 @@ cleanup:
 // Function to check if a process is running in a remote session
 BOOL IsRemoteSession(DWORD processId) {
     DWORD sessionId;
+    DWORD activeConsoleSessionId;
     PWTS_SESSION_INFO pSessionInfo = NULL;
     DWORD count;
     BOOL result = FALSE;
@@ -57,6 +58,15 @@ BOOL IsRemoteSession(DWORD processId) {
         goto cleanup;
     }
     wprintf(L"Process ID: %u, Session ID: %u\n", processId, sessionId);
+
+    // Get the active console session ID
+    activeConsoleSessionId = WTSGetActiveConsoleSessionId();
+    wprintf(L"Active Console Session ID: %u\n", activeConsoleSessionId);
+
+    // If the session ID matches the active console session ID, it's not a remote session
+    if (sessionId == activeConsoleSessionId) {
+        goto cleanup;
+    }
 
     // Enumerate all sessions on the current server
     if (WTSEnumerateSessions(WTS_CURRENT_SERVER_HANDLE, 0, 1, &pSessionInfo, &count)) {
