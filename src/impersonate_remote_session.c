@@ -47,38 +47,30 @@ cleanup:
 // Function to check if a process is running in a remote session
 BOOL IsRemoteSession(DWORD processId) {
     DWORD sessionId;
-    DWORD activeConsoleSessionId;
     PWTS_SESSION_INFO pSessionInfo = NULL;
     DWORD count;
     BOOL result = FALSE;
+    LPTSTR pBuffer = NULL;
+    DWORD bytesReturned = 0;
 
     // Get the session ID for the specified process
-    if (ProcessIdToSessionId(processId, &sessionId) == 0) {
+    if (!ProcessIdToSessionId(processId, &sessionId)) {
         wprintf(L"ProcessIdToSessionId error: %u\n", GetLastError());
         goto cleanup;
     }
     wprintf(L"Process ID: %u, Session ID: %u\n", processId, sessionId);
 
-    // Get the active console session ID
-    activeConsoleSessionId = WTSGetActiveConsoleSessionId();
-    wprintf(L"Active Console Session ID: %u\n", activeConsoleSessionId);
-
-    // If the session ID matches the active console session ID, it's not a remote session
-    if (sessionId == activeConsoleSessionId) {
-        goto cleanup;
-    }
-
-    // Enumerate all sessions on the current server
-    if (WTSEnumerateSessions(WTS_CURRENT_SERVER_HANDLE, 0, 1, &pSessionInfo, &count)) {
-        for (DWORD i = 0; i < count; ++i) {
-            wprintf(L"Enumerated Session ID: %u\n", pSessionInfo[i].SessionId);
-            if (pSessionInfo[i].SessionId == sessionId) {
+    // Query session information to check if it's a remote session
+    if (WTSQuerySessionInformation(WTS_CURRENT_SERVER_HANDLE, sessionId, WTSClientProtocolType, &pBuffer, &bytesReturned)) {
+        if (bytesReturned == sizeof(USHORT)) {
+            USHORT protocolType = *((USHORT*)pBuffer);
+            if (protocolType != WTS_PROTOCOL_TYPE_CONSOLE) {
                 result = TRUE;
-                goto cleanup;
             }
         }
+        WTSFreeMemory(pBuffer);
     } else {
-        wprintf(L"WTSEnumerateSessions error: %u\n", GetLastError());
+        wprintf(L"WTSQuerySessionInformation error: %u\n", GetLastError());
     }
 
 cleanup:
