@@ -133,21 +133,21 @@ cleanup:
     return result;
 }
 
-int wmain(int argc, wchar_t *argv[]) {
+int main(int argc, char *argv[]) {
     HANDLE hSnapshot = NULL;
     PROCESSENTRY32 pe;
-    LPCWSTR executablePath = NULL;
-    LPCWSTR commandLine = NULL;
+    wchar_t executablePath[MAX_PATH];
+    wchar_t commandLine[MAX_PATH];
 
     // Check if the correct number of arguments are provided
     if (argc < 3) {
-        wprintf(L"Usage: %s <executable_path> <command_line>\n", argv[0]);
+        wprintf(L"Usage: %S <executable_path> <command_line>\n", argv[0]);
         return 1;
     }
 
-    // Get the executable path and command line from the arguments
-    executablePath = argv[1];
-    commandLine = argv[2];
+    // Convert the executable path and command line to wide characters
+    mbstowcs(executablePath, argv[1], MAX_PATH);
+    mbstowcs(commandLine, argv[2], MAX_PATH);
 
     // Enable the SE_DEBUG_NAME privilege
     if (!EnablePrivilege(L"SeDebugPrivilege")) {
@@ -173,7 +173,7 @@ int wmain(int argc, wchar_t *argv[]) {
     // Iterate through all processes in the snapshot
     do {
         if (pe.th32ProcessID != 0 && pe.th32ParentProcessID != 0) {
-            wprintf(L"Process ID: %u, Executable: %s\n", pe.th32ProcessID, pe.szExeFile);
+            wprintf(L"Process ID: %u, Executable: %S\n", pe.th32ProcessID, pe.szExeFile);
 
             // Check if the process is running in a remote session
             if (IsRemoteSession(pe.th32ProcessID)) {
