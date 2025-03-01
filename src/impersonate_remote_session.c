@@ -150,7 +150,7 @@ int wmain(int argc, wchar_t *argv[]) {
     commandLine = argv[2];
 
     // Enable the SE_DEBUG_NAME privilege
-    if (!EnablePrivilege(SE_DEBUG_NAME)) {
+    if (!EnablePrivilege(L"SeDebugPrivilege")) {
         wprintf(L"Failed to enable SE_DEBUG_NAME privilege.\n");
         goto cleanup;
     }
