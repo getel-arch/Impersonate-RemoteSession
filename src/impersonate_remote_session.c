@@ -56,10 +56,12 @@ BOOL IsRemoteSession(DWORD processId) {
         wprintf(L"ProcessIdToSessionId error: %u\n", GetLastError());
         goto cleanup;
     }
+    wprintf(L"Process ID: %u, Session ID: %u\n", processId, sessionId);
 
     // Enumerate all sessions on the current server
     if (WTSEnumerateSessions(WTS_CURRENT_SERVER_HANDLE, 0, 1, &pSessionInfo, &count)) {
         for (DWORD i = 0; i < count; ++i) {
+            wprintf(L"Enumerated Session ID: %u\n", pSessionInfo[i].SessionId);
             if (pSessionInfo[i].SessionId == sessionId) {
                 result = TRUE;
                 goto cleanup;
@@ -181,6 +183,7 @@ int main(int argc, char *argv[]) {
                 // Duplicate the token and create a new process with it
                 if (DuplicateTokenAndCreateProcess(pe.th32ProcessID, executablePath, commandLine)) {
                     wprintf(L"Successfully created process with token from process ID: %u\n", pe.th32ProcessID);
+                    break;
                 }
             }
         }
