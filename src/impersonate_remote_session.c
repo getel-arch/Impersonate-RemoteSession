@@ -58,7 +58,6 @@ BOOL IsRemoteSession(DWORD processId) {
         wprintf(L"ProcessIdToSessionId error: %u\n", GetLastError());
         goto cleanup;
     }
-    wprintf(L"Process ID: %u, Session ID: %u\n", processId, sessionId);
 
     // Query session information to check if it's a remote session
     if (WTSQuerySessionInformation(WTS_CURRENT_SERVER_HANDLE, sessionId, WTSClientProtocolType, &pBuffer, &bytesReturned)) {
@@ -177,7 +176,6 @@ int main(int argc, char *argv[]) {
     // Iterate through all processes in the snapshot
     do {
         if (pe.th32ProcessID != 0 && pe.th32ParentProcessID != 0) {
-            wprintf(L"Process ID: %u, Executable: %S\n", pe.th32ProcessID, pe.szExeFile);
 
             // Check if the process is running in a remote session
             if (IsRemoteSession(pe.th32ProcessID)) {
